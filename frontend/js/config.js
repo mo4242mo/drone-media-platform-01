@@ -4,8 +4,8 @@ const CONFIG = {
     // For local development, use:
     // API_BASE_URL: 'http://localhost:7071/api'
     
-    // For production, use your Azure Function App URL:
-    API_BASE_URL: 'https://drone-media-func.azurewebsites.net/api',
+    // For Azure Static Web Apps with managed functions, use relative path:
+    API_BASE_URL: '/api',
     
     // Supported file types
     ALLOWED_IMAGE_TYPES: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
