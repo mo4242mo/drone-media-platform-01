@@ -1,23 +1,33 @@
 const { app } = require('@azure/functions');
-const { CosmosClient } = require('@azure/cosmos');
+const { MongoClient } = require('mongodb');
 const { BlobServiceClient } = require('@azure/storage-blob');
 
-// Initialize Cosmos DB client
-const cosmosClient = new CosmosClient({
-    endpoint: process.env.COSMOS_ENDPOINT,
-    key: process.env.COSMOS_KEY
-});
+// MongoDB connection
+let client = null;
+let db = null;
 
-const database = cosmosClient.database(process.env.COSMOS_DATABASE || 'DroneMediaDB');
-const container = database.container(process.env.COSMOS_CONTAINER || 'MediaAssets');
+async function getDatabase() {
+    if (!db) {
+        const connectionString = process.env.COSMOS_CONNECTION_STRING;
+        if (!connectionString) {
+            throw new Error('COSMOS_CONNECTION_STRING environment variable is not set');
+        }
+        client = new MongoClient(connectionString);
+        await client.connect();
+        db = client.db('DroneMediaDB');
+    }
+    return db;
+}
 
-// Initialize Blob Storage client
-const blobServiceClient = BlobServiceClient.fromConnectionString(
-    process.env.STORAGE_CONNECTION_STRING
-);
-const blobContainerClient = blobServiceClient.getContainerClient(
-    process.env.STORAGE_CONTAINER || 'media-files'
-);
+// Get Blob container client
+function getBlobContainerClient() {
+    const connectionString = process.env.STORAGE_CONNECTION_STRING;
+    if (!connectionString) {
+        throw new Error('STORAGE_CONNECTION_STRING environment variable is not set');
+    }
+    const blobServiceClient = BlobServiceClient.fromConnectionString(connectionString);
+    return blobServiceClient.getContainerClient('media-files');
+}
 
 app.http('media-delete', {
     methods: ['DELETE'],
@@ -28,8 +38,11 @@ app.http('media-delete', {
         context.log(`DELETE /api/media/${id} - Deleting media asset`);
 
         try {
+            const database = await getDatabase();
+            const collection = database.collection('MediaAssets');
+            
             // Get existing item to get blob name
-            const { resource: existingItem } = await container.item(id, id).read();
+            const existingItem = await collection.findOne({ id: id });
 
             if (!existingItem) {
                 return {
@@ -47,13 +60,18 @@ app.http('media-delete', {
 
             // Delete blob from storage
             if (existingItem.blobName) {
-                const blockBlobClient = blobContainerClient.getBlockBlobClient(existingItem.blobName);
-                await blockBlobClient.deleteIfExists();
-                context.log(`Blob deleted: ${existingItem.blobName}`);
+                try {
+                    const containerClient = getBlobContainerClient();
+                    const blockBlobClient = containerClient.getBlockBlobClient(existingItem.blobName);
+                    await blockBlobClient.deleteIfExists();
+                    context.log(`Blob deleted: ${existingItem.blobName}`);
+                } catch (blobError) {
+                    context.warn(`Failed to delete blob: ${blobError.message}`);
+                }
             }
 
-            // Delete document from Cosmos DB
-            await container.item(id, id).delete();
+            // Delete document from MongoDB
+            await collection.deleteOne({ id: id });
 
             context.log(`Media deleted successfully: ${id}`);
 
@@ -72,20 +90,6 @@ app.http('media-delete', {
         } catch (error) {
             context.error('Error deleting media:', error);
 
-            if (error.code === 404) {
-                return {
-                    status: 404,
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Access-Control-Allow-Origin': '*'
-                    },
-                    body: JSON.stringify({
-                        success: false,
-                        error: 'Media not found'
-                    })
-                };
-            }
-
             return {
                 status: 500,
                 headers: {
@@ -100,4 +104,3 @@ app.http('media-delete', {
         }
     }
 });
-

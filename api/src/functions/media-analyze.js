@@ -1,14 +1,22 @@
 const { app } = require('@azure/functions');
-const { CosmosClient } = require('@azure/cosmos');
+const { MongoClient } = require('mongodb');
 
-// Initialize Cosmos DB client
-const cosmosClient = new CosmosClient({
-    endpoint: process.env.COSMOS_ENDPOINT,
-    key: process.env.COSMOS_KEY
-});
+// MongoDB connection
+let client = null;
+let db = null;
 
-const database = cosmosClient.database(process.env.COSMOS_DATABASE || 'DroneMediaDB');
-const container = database.container(process.env.COSMOS_CONTAINER || 'MediaAssets');
+async function getDatabase() {
+    if (!db) {
+        const connectionString = process.env.COSMOS_CONNECTION_STRING;
+        if (!connectionString) {
+            throw new Error('COSMOS_CONNECTION_STRING environment variable is not set');
+        }
+        client = new MongoClient(connectionString);
+        await client.connect();
+        db = client.db('DroneMediaDB');
+    }
+    return db;
+}
 
 /**
  * Advanced Feature: Image Analysis using Azure Cognitive Services
@@ -46,7 +54,9 @@ app.http('media-analyze', {
             }
 
             // Get the media item
-            const { resource: item } = await container.item(id, id).read();
+            const database = await getDatabase();
+            const collection = database.collection('MediaAssets');
+            const item = await collection.findOne({ id: id });
 
             if (!item) {
                 return {
@@ -98,32 +108,36 @@ app.http('media-analyze', {
 
             const analysisResult = await analysisResponse.json();
 
-            // Update the media item with AI analysis results
-            const updatedItem = {
-                ...item,
-                aiAnalysis: {
-                    analyzedAt: new Date().toISOString(),
-                    description: analysisResult.description?.captions?.[0]?.text || '',
-                    confidence: analysisResult.description?.captions?.[0]?.confidence || 0,
-                    tags: analysisResult.tags?.map(t => ({ name: t.name, confidence: t.confidence })) || [],
-                    categories: analysisResult.categories?.map(c => ({ name: c.name, score: c.score })) || [],
-                    objects: analysisResult.objects?.map(o => ({ 
-                        name: o.object, 
-                        confidence: o.confidence,
-                        rectangle: o.rectangle 
-                    })) || [],
-                    colors: {
-                        dominantColorForeground: analysisResult.color?.dominantColorForeground,
-                        dominantColorBackground: analysisResult.color?.dominantColorBackground,
-                        dominantColors: analysisResult.color?.dominantColors,
-                        accentColor: analysisResult.color?.accentColor
-                    }
-                },
-                updatedAt: new Date().toISOString()
+            // Prepare AI analysis data
+            const aiAnalysis = {
+                analyzedAt: new Date().toISOString(),
+                description: analysisResult.description?.captions?.[0]?.text || '',
+                confidence: analysisResult.description?.captions?.[0]?.confidence || 0,
+                tags: analysisResult.tags?.map(t => ({ name: t.name, confidence: t.confidence })) || [],
+                categories: analysisResult.categories?.map(c => ({ name: c.name, score: c.score })) || [],
+                objects: analysisResult.objects?.map(o => ({ 
+                    name: o.object, 
+                    confidence: o.confidence,
+                    rectangle: o.rectangle 
+                })) || [],
+                colors: {
+                    dominantColorForeground: analysisResult.color?.dominantColorForeground,
+                    dominantColorBackground: analysisResult.color?.dominantColorBackground,
+                    dominantColors: analysisResult.color?.dominantColors,
+                    accentColor: analysisResult.color?.accentColor
+                }
             };
 
-            // Save updated item
-            await container.item(id, id).replace(updatedItem);
+            // Update item in MongoDB
+            await collection.updateOne(
+                { id: id },
+                { 
+                    $set: { 
+                        aiAnalysis: aiAnalysis,
+                        updatedAt: new Date().toISOString()
+                    } 
+                }
+            );
 
             context.log(`Media analyzed successfully: ${id}`);
 
@@ -138,7 +152,7 @@ app.http('media-analyze', {
                     message: 'Media analyzed successfully',
                     data: {
                         id: id,
-                        aiAnalysis: updatedItem.aiAnalysis
+                        aiAnalysis: aiAnalysis
                     }
                 })
             };
@@ -158,4 +172,3 @@ app.http('media-analyze', {
         }
     }
 });
-

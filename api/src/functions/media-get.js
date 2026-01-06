@@ -1,14 +1,22 @@
 const { app } = require('@azure/functions');
-const { CosmosClient } = require('@azure/cosmos');
+const { MongoClient } = require('mongodb');
 
-// Initialize Cosmos DB client
-const cosmosClient = new CosmosClient({
-    endpoint: process.env.COSMOS_ENDPOINT,
-    key: process.env.COSMOS_KEY
-});
+// MongoDB connection
+let client = null;
+let db = null;
 
-const database = cosmosClient.database(process.env.COSMOS_DATABASE || 'DroneMediaDB');
-const container = database.container(process.env.COSMOS_CONTAINER || 'MediaAssets');
+async function getDatabase() {
+    if (!db) {
+        const connectionString = process.env.COSMOS_CONNECTION_STRING;
+        if (!connectionString) {
+            throw new Error('COSMOS_CONNECTION_STRING environment variable is not set');
+        }
+        client = new MongoClient(connectionString);
+        await client.connect();
+        db = client.db('DroneMediaDB');
+    }
+    return db;
+}
 
 app.http('media-get', {
     methods: ['GET'],
@@ -19,7 +27,9 @@ app.http('media-get', {
         context.log(`GET /api/media/${id} - Getting media asset`);
 
         try {
-            const { resource: item } = await container.item(id, id).read();
+            const database = await getDatabase();
+            const collection = database.collection('MediaAssets');
+            const item = await collection.findOne({ id: id });
 
             if (!item) {
                 return {
@@ -48,20 +58,6 @@ app.http('media-get', {
             };
         } catch (error) {
             context.error('Error getting media:', error);
-            
-            if (error.code === 404) {
-                return {
-                    status: 404,
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Access-Control-Allow-Origin': '*'
-                    },
-                    body: JSON.stringify({
-                        success: false,
-                        error: 'Media not found'
-                    })
-                };
-            }
 
             return {
                 status: 500,
@@ -77,4 +73,3 @@ app.http('media-get', {
         }
     }
 });
-

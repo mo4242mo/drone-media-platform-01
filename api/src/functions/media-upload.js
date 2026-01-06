@@ -1,24 +1,34 @@
 const { app } = require('@azure/functions');
-const { CosmosClient } = require('@azure/cosmos');
+const { MongoClient } = require('mongodb');
 const { BlobServiceClient } = require('@azure/storage-blob');
 const { v4: uuidv4 } = require('uuid');
 
-// Initialize Cosmos DB client
-const cosmosClient = new CosmosClient({
-    endpoint: process.env.COSMOS_ENDPOINT,
-    key: process.env.COSMOS_KEY
-});
+// MongoDB connection
+let mongoClient = null;
+let db = null;
 
-const database = cosmosClient.database(process.env.COSMOS_DATABASE || 'DroneMediaDB');
-const container = database.container(process.env.COSMOS_CONTAINER || 'MediaAssets');
+async function getDatabase() {
+    if (!db) {
+        const connectionString = process.env.COSMOS_CONNECTION_STRING;
+        if (!connectionString) {
+            throw new Error('COSMOS_CONNECTION_STRING environment variable is not set');
+        }
+        mongoClient = new MongoClient(connectionString);
+        await mongoClient.connect();
+        db = mongoClient.db('DroneMediaDB');
+    }
+    return db;
+}
 
-// Initialize Blob Storage client
-const blobServiceClient = BlobServiceClient.fromConnectionString(
-    process.env.STORAGE_CONNECTION_STRING
-);
-const containerClient = blobServiceClient.getContainerClient(
-    process.env.STORAGE_CONTAINER || 'media-files'
-);
+// Get Blob container client
+function getBlobContainerClient() {
+    const connectionString = process.env.STORAGE_CONNECTION_STRING;
+    if (!connectionString) {
+        throw new Error('STORAGE_CONNECTION_STRING environment variable is not set');
+    }
+    const blobServiceClient = BlobServiceClient.fromConnectionString(connectionString);
+    return blobServiceClient.getContainerClient('media-files');
+}
 
 app.http('media-upload', {
     methods: ['POST'],
@@ -58,6 +68,11 @@ app.http('media-upload', {
             const blobName = `${id}.${fileExtension}`;
 
             // Upload file to Blob Storage
+            const containerClient = getBlobContainerClient();
+            
+            // Ensure container exists
+            await containerClient.createIfNotExists({ access: 'blob' });
+            
             const blockBlobClient = containerClient.getBlockBlobClient(blobName);
             const arrayBuffer = await file.arrayBuffer();
             const buffer = Buffer.from(arrayBuffer);
@@ -70,8 +85,9 @@ app.http('media-upload', {
 
             const blobUrl = blockBlobClient.url;
 
-            // Create metadata document in Cosmos DB
+            // Create metadata document in MongoDB
             const mediaDocument = {
+                _id: id,
                 id: id,
                 title: title,
                 description: description,
@@ -93,7 +109,9 @@ app.http('media-upload', {
                 updatedAt: new Date().toISOString()
             };
 
-            const { resource: createdItem } = await container.items.create(mediaDocument);
+            const database = await getDatabase();
+            const collection = database.collection('MediaAssets');
+            const result = await collection.insertOne(mediaDocument);
 
             context.log(`Media uploaded successfully: ${id}`);
 
@@ -106,7 +124,7 @@ app.http('media-upload', {
                 body: JSON.stringify({
                     success: true,
                     message: 'Media uploaded successfully',
-                    data: createdItem
+                    data: mediaDocument
                 })
             };
         } catch (error) {
@@ -125,4 +143,3 @@ app.http('media-upload', {
         }
     }
 });
-

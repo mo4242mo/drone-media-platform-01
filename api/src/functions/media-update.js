@@ -1,14 +1,22 @@
 const { app } = require('@azure/functions');
-const { CosmosClient } = require('@azure/cosmos');
+const { MongoClient } = require('mongodb');
 
-// Initialize Cosmos DB client
-const cosmosClient = new CosmosClient({
-    endpoint: process.env.COSMOS_ENDPOINT,
-    key: process.env.COSMOS_KEY
-});
+// MongoDB connection
+let client = null;
+let db = null;
 
-const database = cosmosClient.database(process.env.COSMOS_DATABASE || 'DroneMediaDB');
-const container = database.container(process.env.COSMOS_CONTAINER || 'MediaAssets');
+async function getDatabase() {
+    if (!db) {
+        const connectionString = process.env.COSMOS_CONNECTION_STRING;
+        if (!connectionString) {
+            throw new Error('COSMOS_CONNECTION_STRING environment variable is not set');
+        }
+        client = new MongoClient(connectionString);
+        await client.connect();
+        db = client.db('DroneMediaDB');
+    }
+    return db;
+}
 
 app.http('media-update', {
     methods: ['PUT'],
@@ -19,8 +27,11 @@ app.http('media-update', {
         context.log(`PUT /api/media/${id} - Updating media asset`);
 
         try {
+            const database = await getDatabase();
+            const collection = database.collection('MediaAssets');
+            
             // Get existing item
-            const { resource: existingItem } = await container.item(id, id).read();
+            const existingItem = await collection.findOne({ id: id });
 
             if (!existingItem) {
                 return {
@@ -40,8 +51,7 @@ app.http('media-update', {
             const body = await request.json();
 
             // Update only allowed fields
-            const updatedItem = {
-                ...existingItem,
+            const updateData = {
                 title: body.title || existingItem.title,
                 description: body.description || existingItem.description,
                 metadata: {
@@ -57,8 +67,13 @@ app.http('media-update', {
                 updatedAt: new Date().toISOString()
             };
 
-            // Replace item in Cosmos DB
-            const { resource: replacedItem } = await container.item(id, id).replace(updatedItem);
+            // Update item in MongoDB
+            const result = await collection.updateOne(
+                { id: id },
+                { $set: updateData }
+            );
+
+            const updatedItem = await collection.findOne({ id: id });
 
             context.log(`Media updated successfully: ${id}`);
 
@@ -71,25 +86,11 @@ app.http('media-update', {
                 body: JSON.stringify({
                     success: true,
                     message: 'Media updated successfully',
-                    data: replacedItem
+                    data: updatedItem
                 })
             };
         } catch (error) {
             context.error('Error updating media:', error);
-
-            if (error.code === 404) {
-                return {
-                    status: 404,
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Access-Control-Allow-Origin': '*'
-                    },
-                    body: JSON.stringify({
-                        success: false,
-                        error: 'Media not found'
-                    })
-                };
-            }
 
             return {
                 status: 500,
@@ -105,4 +106,3 @@ app.http('media-update', {
         }
     }
 });
-
