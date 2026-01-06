@@ -54,6 +54,13 @@ app.http('media-upload', {
             const description = formData.get('description') || '';
             const tagsString = formData.get('tags');
             const tags = tagsString ? tagsString.split(',').map(tag => tag.trim()) : [];
+            
+            // Get GPS metadata
+            const latitude = formData.get('latitude');
+            const longitude = formData.get('longitude');
+            const altitude = formData.get('altitude');
+            const droneModel = formData.get('droneModel');
+            const missionId = formData.get('missionId');
 
             if (!file) {
                 return {
@@ -80,7 +87,7 @@ app.http('media-upload', {
                 blobHTTPHeaders: { blobContentType: file.type }
             });
 
-            // Create media item
+            // Create media item with GPS metadata
             const mediaItem = {
                 id: mediaId,
                 title: title,
@@ -90,7 +97,16 @@ app.http('media-upload', {
                 fileType: file.type,
                 fileSize: file.size,
                 tags: tags,
-                uploadDate: new Date().toISOString()
+                uploadDate: new Date().toISOString(),
+                gps: {
+                    latitude: latitude || null,
+                    longitude: longitude || null,
+                    altitude: altitude ? parseFloat(altitude) : null
+                },
+                metadata: {
+                    droneModel: droneModel || null,
+                    missionId: missionId || null
+                }
             };
 
             // Save to Cosmos DB
