@@ -7,7 +7,6 @@ const previewImage = document.getElementById('previewImage');
 const previewVideo = document.getElementById('previewVideo');
 const removeFileBtn = document.getElementById('removeFile');
 const submitBtn = document.getElementById('submitBtn');
-const getLocationBtn = document.getElementById('getLocation');
 const uploadProgress = document.getElementById('uploadProgress');
 const progressFill = document.getElementById('progressFill');
 const progressText = document.getElementById('progressText');
@@ -38,9 +37,6 @@ function setupEventListeners() {
     
     // Remove file
     removeFileBtn.addEventListener('click', removeFile);
-    
-    // Get location
-    getLocationBtn.addEventListener('click', getCurrentLocation);
     
     // Form submit
     uploadForm.addEventListener('submit', handleUpload);
@@ -149,41 +145,6 @@ function removeFile() {
     submitBtn.disabled = true;
     
     hideMessages();
-}
-
-// Get Current Location
-function getCurrentLocation() {
-    if (!navigator.geolocation) {
-        showError('Geolocation is not supported by your browser.');
-        return;
-    }
-    
-    getLocationBtn.disabled = true;
-    getLocationBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Getting location...';
-    
-    navigator.geolocation.getCurrentPosition(
-        (position) => {
-            document.getElementById('latitude').value = position.coords.latitude.toFixed(6);
-            document.getElementById('longitude').value = position.coords.longitude.toFixed(6);
-            
-            if (position.coords.altitude) {
-                document.getElementById('altitude').value = position.coords.altitude.toFixed(1);
-            }
-            
-            getLocationBtn.disabled = false;
-            getLocationBtn.innerHTML = '<i class="fas fa-crosshairs"></i> Get Current Location';
-        },
-        (error) => {
-            showError('Unable to get your location: ' + error.message);
-            getLocationBtn.disabled = false;
-            getLocationBtn.innerHTML = '<i class="fas fa-crosshairs"></i> Get Current Location';
-        },
-        {
-            enableHighAccuracy: true,
-            timeout: 10000,
-            maximumAge: 0
-        }
-    );
 }
 
 // Handle Upload
