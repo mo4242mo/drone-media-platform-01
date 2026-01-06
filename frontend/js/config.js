@@ -68,6 +68,11 @@ async function apiCall(endpoint, options = {}) {
         throw new Error(error.error || `HTTP error! status: ${response.status}`);
     }
     
+    // Handle 204 No Content (e.g., successful DELETE)
+    if (response.status === 204) {
+        return null;
+    }
+    
     return response.json();
 }
 
