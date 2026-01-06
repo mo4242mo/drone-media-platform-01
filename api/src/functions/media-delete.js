@@ -43,8 +43,22 @@ app.http('media-delete', {
         try {
             const mediaContainer = await getContainer();
 
-            // First, get the existing item to get the file name
-            const { resource: mediaItem } = await mediaContainer.item(id, id).read();
+            // First, try to get the existing item to get the file name
+            let mediaItem;
+            try {
+                const { resource } = await mediaContainer.item(id, id).read();
+                mediaItem = resource;
+            } catch (readError) {
+                if (readError.code === 404) {
+                    return {
+                        status: 404,
+                        jsonBody: {
+                            message: `Media asset with id ${id} not found`
+                        }
+                    };
+                }
+                throw readError;
+            }
             
             if (!mediaItem) {
                 return {
