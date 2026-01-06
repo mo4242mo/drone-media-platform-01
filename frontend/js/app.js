@@ -76,7 +76,7 @@ async function loadMedia() {
     
     try {
         const response = await apiCall('/media');
-        mediaItems = response.data || [];
+        mediaItems = Array.isArray(response) ? response : [];
         updateStats();
         renderMedia();
     } catch (error) {
@@ -118,8 +118,8 @@ function createMediaCard(item) {
         <div class="media-card" data-id="${item.id}">
             <div class="thumbnail">
                 ${isVideo 
-                    ? `<video src="${item.blobUrl}" muted></video>`
-                    : `<img src="${item.blobUrl}" alt="${item.title}" loading="lazy">`
+                    ? `<video src="${item.fileUrl}" muted></video>`
+                    : `<img src="${item.fileUrl}" alt="${item.title}" loading="lazy">`
                 }
                 <span class="media-type">
                     <i class="fas fa-${isVideo ? 'video' : 'image'}"></i>
@@ -130,7 +130,7 @@ function createMediaCard(item) {
                 <h3>${escapeHtml(item.title)}</h3>
                 <p>${escapeHtml(item.description || 'No description')}</p>
                 <div class="card-meta">
-                    <span><i class="fas fa-clock"></i> ${formatDate(item.uploadedAt)}</span>
+                    <span><i class="fas fa-clock"></i> ${formatDate(item.uploadDate)}</span>
                     <span><i class="fas fa-hdd"></i> ${formatFileSize(item.fileSize)}</span>
                 </div>
             </div>
@@ -187,11 +187,11 @@ function openMediaModal(id) {
     if (isVideo) {
         modalImage.style.display = 'none';
         modalVideo.style.display = 'block';
-        modalVideo.src = item.blobUrl;
+        modalVideo.src = item.fileUrl;
     } else {
         modalVideo.style.display = 'none';
         modalImage.style.display = 'block';
-        modalImage.src = item.blobUrl;
+        modalImage.src = item.fileUrl;
     }
     
     // Set info
@@ -200,7 +200,7 @@ function openMediaModal(id) {
     document.getElementById('modalFileName').textContent = item.fileName;
     document.getElementById('modalFileType').textContent = item.fileType;
     document.getElementById('modalFileSize').textContent = formatFileSize(item.fileSize);
-    document.getElementById('modalUploadDate').textContent = formatDate(item.uploadedAt);
+    document.getElementById('modalUploadDate').textContent = formatDate(item.uploadDate);
     
     // Set GPS metadata
     const gps = item.metadata?.gps || {};
@@ -264,7 +264,7 @@ function downloadMedia() {
     if (!item) return;
     
     const link = document.createElement('a');
-    link.href = item.blobUrl;
+    link.href = item.fileUrl;
     link.download = item.fileName;
     link.target = '_blank';
     document.body.appendChild(link);
