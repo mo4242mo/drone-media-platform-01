@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Media - Drone Media Platform</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <i class="fas fa-drone"></i>
+            <span>Drone Media Platform</span>
+        </div>
+        <div class="nav-links">
+            <a href="index.html">
+                <i class="fas fa-images"></i> Gallery
+            </a>
+            <a href="upload.html" class="active">
+                <i class="fas fa-cloud-upload-alt"></i> Upload
+            </a>
+        </div>
+    </nav>
+
+    <main class="container">
+        <header class="page-header">
+            <h1><i class="fas fa-cloud-upload-alt"></i> Upload Media</h1>
+            <p>Upload drone photos and videos with metadata</p>
+        </header>
+
+        <div class="upload-container">
+            <form id="uploadForm" class="upload-form">
+                <!-- File Drop Zone -->
+                <div class="drop-zone" id="dropZone">
+                    <div class="drop-zone-content">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <h3>Drag & Drop your files here</h3>
+                        <p>or click to browse</p>
+                        <p class="file-types">Supported: JPG, PNG, MP4, MOV (max 100MB)</p>
+                    </div>
+                    <input type="file" id="fileInput" accept="image/*,video/*" hidden>
+                </div>
+
+                <!-- File Preview -->
+                <div id="filePreview" class="file-preview" style="display: none;">
+                    <div class="preview-image-container">
+                        <img id="previewImage" src="" alt="Preview">
+                        <video id="previewVideo" controls style="display: none;"></video>
+                    </div>
+                    <div class="file-info">
+                        <p><strong>File:</strong> <span id="fileName"></span></p>
+                        <p><strong>Size:</strong> <span id="fileSize"></span></p>
+                        <p><strong>Type:</strong> <span id="fileType"></span></p>
+                    </div>
+                    <button type="button" id="removeFile" class="btn btn-secondary btn-sm">
+                        <i class="fas fa-times"></i> Remove
+                    </button>
+                </div>
+
+                <!-- Metadata Form -->
+                <div class="metadata-section">
+                    <h3><i class="fas fa-tags"></i> Media Information</h3>
+                    
+                    <div class="form-group">
+                        <label for="title">Title *</label>
+                        <input type="text" id="title" name="title" required placeholder="Enter a title for your media">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="description">Description</label>
+                        <textarea id="description" name="description" rows="3" placeholder="Add a description..."></textarea>
+                    </div>
+                </div>
+
+                <div class="metadata-section">
+                    <h3><i class="fas fa-map-marker-alt"></i> GPS Metadata</h3>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="latitude">Latitude</label>
+                            <input type="number" id="latitude" name="latitude" step="any" placeholder="e.g., 54.5973">
+                        </div>
+                        <div class="form-group">
+                            <label for="longitude">Longitude</label>
+                            <input type="number" id="longitude" name="longitude" step="any" placeholder="e.g., -5.9301">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="altitude">Altitude (meters)</label>
+                            <input type="number" id="altitude" name="altitude" step="any" placeholder="e.g., 120">
+                        </div>
+                        <div class="form-group">
+                            <label for="droneModel">Drone Model</label>
+                            <input type="text" id="droneModel" name="droneModel" placeholder="e.g., DJI Mavic 3">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="missionId">Mission ID (optional)</label>
+                        <input type="text" id="missionId" name="missionId" placeholder="e.g., MISSION-2025-001">
+                    </div>
+
+                    <button type="button" id="getLocation" class="btn btn-secondary btn-sm">
+                        <i class="fas fa-crosshairs"></i> Get Current Location
+                    </button>
+                </div>
+
+                <!-- Upload Progress -->
+                <div id="uploadProgress" class="upload-progress" style="display: none;">
+                    <div class="progress-bar">
+                        <div id="progressFill" class="progress-fill"></div>
+                    </div>
+                    <p id="progressText">Uploading...</p>
+                </div>
+
+                <!-- Messages -->
+                <div id="successMessage" class="message success" style="display: none;">
+                    <i class="fas fa-check-circle"></i>
+                    <span>Media uploaded successfully!</span>
+                    <a href="index.html">View in Gallery</a>
+                </div>
+
+                <div id="errorMessage" class="message error" style="display: none;">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <span id="errorText">An error occurred</span>
+                </div>
+
+                <!-- Submit Button -->
+                <div class="form-actions">
+                    <button type="submit" id="submitBtn" class="btn btn-primary btn-lg" disabled>
+                        <i class="fas fa-upload"></i> Upload Media
+                    </button>
+                </div>
+            </form>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>&copy; 2025 Drone Media Platform - Ulster University COM682 Cloud Native Development</p>
+    </footer>
+
+    <script src="js/config.js"></script>
+    <script src="js/upload.js"></script>
+</body>
+</html>
+

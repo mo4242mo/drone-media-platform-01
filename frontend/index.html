@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drone Media Platform</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <i class="fas fa-drone"></i>
+            <span>Drone Media Platform</span>
+        </div>
+        <div class="nav-links">
+            <a href="index.html" class="active">
+                <i class="fas fa-images"></i> Gallery
+            </a>
+            <a href="upload.html">
+                <i class="fas fa-cloud-upload-alt"></i> Upload
+            </a>
+        </div>
+    </nav>
+
+    <main class="container">
+        <header class="page-header">
+            <h1><i class="fas fa-photo-video"></i> Media Gallery</h1>
+            <p>Browse and manage your drone media collection</p>
+        </header>
+
+        <div class="controls">
+            <div class="search-box">
+                <i class="fas fa-search"></i>
+                <input type="text" id="searchInput" placeholder="Search media...">
+            </div>
+            <div class="filter-buttons">
+                <button class="filter-btn active" data-filter="all">All</button>
+                <button class="filter-btn" data-filter="image">Images</button>
+                <button class="filter-btn" data-filter="video">Videos</button>
+            </div>
+        </div>
+
+        <div class="stats-bar">
+            <div class="stat">
+                <i class="fas fa-images"></i>
+                <span id="totalCount">0</span> Total Items
+            </div>
+            <div class="stat">
+                <i class="fas fa-database"></i>
+                <span id="storageUsed">0 MB</span> Storage Used
+            </div>
+        </div>
+
+        <div id="loadingIndicator" class="loading">
+            <div class="spinner"></div>
+            <p>Loading media...</p>
+        </div>
+
+        <div id="errorMessage" class="error-message" style="display: none;">
+            <i class="fas fa-exclamation-circle"></i>
+            <span id="errorText"></span>
+        </div>
+
+        <div id="emptyState" class="empty-state" style="display: none;">
+            <i class="fas fa-folder-open"></i>
+            <h3>No media found</h3>
+            <p>Start by uploading your first drone media</p>
+            <a href="upload.html" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Upload Media
+            </a>
+        </div>
+
+        <div id="mediaGrid" class="media-grid"></div>
+    </main>
+
+    <!-- Media Detail Modal -->
+    <div id="mediaModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn">&times;</span>
+            <div class="modal-body">
+                <div class="media-preview">
+                    <img id="modalImage" src="" alt="">
+                    <video id="modalVideo" controls style="display: none;"></video>
+                </div>
+                <div class="media-info">
+                    <h2 id="modalTitle"></h2>
+                    <p id="modalDescription"></p>
+                    
+                    <div class="info-section">
+                        <h4><i class="fas fa-info-circle"></i> File Information</h4>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <span class="label">File Name:</span>
+                                <span id="modalFileName"></span>
+                            </div>
+                            <div class="info-item">
+                                <span class="label">File Type:</span>
+                                <span id="modalFileType"></span>
+                            </div>
+                            <div class="info-item">
+                                <span class="label">File Size:</span>
+                                <span id="modalFileSize"></span>
+                            </div>
+                            <div class="info-item">
+                                <span class="label">Uploaded:</span>
+                                <span id="modalUploadDate"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="info-section">
+                        <h4><i class="fas fa-map-marker-alt"></i> GPS Metadata</h4>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <span class="label">Latitude:</span>
+                                <span id="modalLatitude">N/A</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="label">Longitude:</span>
+                                <span id="modalLongitude">N/A</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="label">Altitude:</span>
+                                <span id="modalAltitude">N/A</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="label">Drone Model:</span>
+                                <span id="modalDroneModel">N/A</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-actions">
+                        <button id="editBtn" class="btn btn-secondary">
+                            <i class="fas fa-edit"></i> Edit
+                        </button>
+                        <button id="downloadBtn" class="btn btn-primary">
+                            <i class="fas fa-download"></i> Download
+                        </button>
+                        <button id="deleteBtn" class="btn btn-danger">
+                            <i class="fas fa-trash"></i> Delete
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Modal -->
+    <div id="editModal" class="modal">
+        <div class="modal-content modal-small">
+            <span class="close-btn edit-close">&times;</span>
+            <h2><i class="fas fa-edit"></i> Edit Media</h2>
+            <form id="editForm">
+                <input type="hidden" id="editId">
+                <div class="form-group">
+                    <label for="editTitle">Title</label>
+                    <input type="text" id="editTitle" required>
+                </div>
+                <div class="form-group">
+                    <label for="editDescription">Description</label>
+                    <textarea id="editDescription" rows="3"></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="editLatitude">Latitude</label>
+                        <input type="number" id="editLatitude" step="any">
+                    </div>
+                    <div class="form-group">
+                        <label for="editLongitude">Longitude</label>
+                        <input type="number" id="editLongitude" step="any">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="editAltitude">Altitude (m)</label>
+                        <input type="number" id="editAltitude" step="any">
+                    </div>
+                    <div class="form-group">
+                        <label for="editDroneModel">Drone Model</label>
+                        <input type="text" id="editDroneModel">
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary edit-cancel">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>&copy; 2025 Drone Media Platform - Ulster University COM682 Cloud Native Development</p>
+    </footer>
+
+    <script src="js/config.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
+
