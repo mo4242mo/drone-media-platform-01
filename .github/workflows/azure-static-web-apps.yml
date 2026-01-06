@@ -28,9 +28,9 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: "upload"
           # App location relative to repo root
-          app_location: "/drone-media-platform/frontend"
+          app_location: "/frontend"
           # API location (Azure Functions)
-          api_location: "/drone-media-platform/api"
+          api_location: "/api"
           # Built app location (leave empty for static HTML)
           output_location: ""
 
