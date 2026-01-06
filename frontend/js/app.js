@@ -203,7 +203,7 @@ function openMediaModal(id) {
     document.getElementById('modalUploadDate').textContent = formatDate(item.uploadDate);
     
     // Set GPS metadata
-    const gps = item.metadata?.gps || {};
+    const gps = item.gps || {};
     document.getElementById('modalLatitude').textContent = gps.latitude || 'N/A';
     document.getElementById('modalLongitude').textContent = gps.longitude || 'N/A';
     document.getElementById('modalAltitude').textContent = gps.altitude ? `${gps.altitude}m` : 'N/A';
@@ -220,9 +220,9 @@ function openEditModal() {
     document.getElementById('editId').value = item.id;
     document.getElementById('editTitle').value = item.title;
     document.getElementById('editDescription').value = item.description || '';
-    document.getElementById('editLatitude').value = item.metadata?.gps?.latitude || '';
-    document.getElementById('editLongitude').value = item.metadata?.gps?.longitude || '';
-    document.getElementById('editAltitude').value = item.metadata?.gps?.altitude || '';
+    document.getElementById('editLatitude').value = item.gps?.latitude || '';
+    document.getElementById('editLongitude').value = item.gps?.longitude || '';
+    document.getElementById('editAltitude').value = item.gps?.altitude || '';
     document.getElementById('editDroneModel').value = item.metadata?.droneModel || '';
     
     editModal.classList.add('show');
@@ -233,13 +233,22 @@ async function handleEditSubmit(e) {
     e.preventDefault();
     
     const id = document.getElementById('editId').value;
+    const latitude = document.getElementById('editLatitude').value;
+    const longitude = document.getElementById('editLongitude').value;
+    const altitude = document.getElementById('editAltitude').value;
+    const droneModel = document.getElementById('editDroneModel').value;
+    
     const data = {
         title: document.getElementById('editTitle').value,
         description: document.getElementById('editDescription').value,
-        latitude: document.getElementById('editLatitude').value || null,
-        longitude: document.getElementById('editLongitude').value || null,
-        altitude: document.getElementById('editAltitude').value || null,
-        droneModel: document.getElementById('editDroneModel').value
+        gps: {
+            latitude: latitude || null,
+            longitude: longitude || null,
+            altitude: altitude ? parseFloat(altitude) : null
+        },
+        metadata: {
+            droneModel: droneModel || null
+        }
     };
     
     try {
