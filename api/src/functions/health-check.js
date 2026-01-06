@@ -1,19 +1,4 @@
 const { app } = require('@azure/functions');
-const appInsights = require('applicationinsights');
-
-// Initialize Application Insights if configured
-if (process.env.APPLICATIONINSIGHTS_CONNECTION_STRING) {
-    appInsights.setup(process.env.APPLICATIONINSIGHTS_CONNECTION_STRING)
-        .setAutoDependencyCorrelation(true)
-        .setAutoCollectRequests(true)
-        .setAutoCollectPerformance(true, true)
-        .setAutoCollectExceptions(true)
-        .setAutoCollectDependencies(true)
-        .setAutoCollectConsole(true, true)
-        .setUseDiskRetryCaching(true)
-        .setSendLiveMetrics(true)
-        .start();
-}
 
 /**
  * Health Check Endpoint
@@ -32,49 +17,45 @@ app.http('health-check', {
             version: '1.0.0',
             services: {
                 api: 'running',
-                cosmosDb: 'unknown',
-                blobStorage: 'unknown',
-                cognitiveServices: process.env.COGNITIVE_ENDPOINT ? 'configured' : 'not configured',
-                applicationInsights: process.env.APPLICATIONINSIGHTS_CONNECTION_STRING ? 'configured' : 'not configured'
+                mongodb: 'unknown',
+                blobStorage: 'unknown'
             }
         };
 
-        // Test Cosmos DB connection
+        // Test MongoDB connection
         try {
-            const { CosmosClient } = require('@azure/cosmos');
-            const client = new CosmosClient({
-                endpoint: process.env.COSMOS_ENDPOINT,
-                key: process.env.COSMOS_KEY
-            });
-            await client.getDatabaseAccount();
-            healthStatus.services.cosmosDb = 'connected';
+            const { MongoClient } = require('mongodb');
+            if (process.env.COSMOS_CONNECTION_STRING) {
+                const client = new MongoClient(process.env.COSMOS_CONNECTION_STRING);
+                await client.connect();
+                await client.db('DroneMediaDB').command({ ping: 1 });
+                await client.close();
+                healthStatus.services.mongodb = 'connected';
+            } else {
+                healthStatus.services.mongodb = 'not configured';
+                healthStatus.status = 'degraded';
+            }
         } catch (error) {
-            healthStatus.services.cosmosDb = 'error: ' + error.message;
+            healthStatus.services.mongodb = 'error: ' + error.message;
             healthStatus.status = 'degraded';
         }
 
         // Test Blob Storage connection
         try {
             const { BlobServiceClient } = require('@azure/storage-blob');
-            const blobServiceClient = BlobServiceClient.fromConnectionString(
-                process.env.STORAGE_CONNECTION_STRING
-            );
-            await blobServiceClient.getProperties();
-            healthStatus.services.blobStorage = 'connected';
+            if (process.env.STORAGE_CONNECTION_STRING) {
+                const blobServiceClient = BlobServiceClient.fromConnectionString(
+                    process.env.STORAGE_CONNECTION_STRING
+                );
+                await blobServiceClient.getProperties();
+                healthStatus.services.blobStorage = 'connected';
+            } else {
+                healthStatus.services.blobStorage = 'not configured';
+                healthStatus.status = 'degraded';
+            }
         } catch (error) {
             healthStatus.services.blobStorage = 'error: ' + error.message;
             healthStatus.status = 'degraded';
-        }
-
-        // Track custom event in Application Insights
-        if (appInsights.defaultClient) {
-            appInsights.defaultClient.trackEvent({
-                name: 'HealthCheck',
-                properties: {
-                    status: healthStatus.status,
-                    timestamp: healthStatus.timestamp
-                }
-            });
         }
 
         const statusCode = healthStatus.status === 'healthy' ? 200 : 503;
@@ -89,4 +70,3 @@ app.http('health-check', {
         };
     }
 });
-

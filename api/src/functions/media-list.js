@@ -1,14 +1,22 @@
 const { app } = require('@azure/functions');
-const { CosmosClient } = require('@azure/cosmos');
+const { MongoClient } = require('mongodb');
 
-// Initialize Cosmos DB client
-const cosmosClient = new CosmosClient({
-    endpoint: process.env.COSMOS_ENDPOINT,
-    key: process.env.COSMOS_KEY
-});
+// MongoDB connection
+let client = null;
+let db = null;
 
-const database = cosmosClient.database(process.env.COSMOS_DATABASE || 'DroneMediaDB');
-const container = database.container(process.env.COSMOS_CONTAINER || 'MediaAssets');
+async function getDatabase() {
+    if (!db) {
+        const connectionString = process.env.COSMOS_CONNECTION_STRING;
+        if (!connectionString) {
+            throw new Error('COSMOS_CONNECTION_STRING environment variable is not set');
+        }
+        client = new MongoClient(connectionString);
+        await client.connect();
+        db = client.db('DroneMediaDB');
+    }
+    return db;
+}
 
 app.http('media-list', {
     methods: ['GET'],
@@ -18,14 +26,14 @@ app.http('media-list', {
         context.log('GET /api/media - Listing all media assets');
 
         try {
-            // Query all media items
-            const querySpec = {
-                query: 'SELECT * FROM c ORDER BY c.uploadedAt DESC'
-            };
-
-            const { resources: items } = await container.items
-                .query(querySpec)
-                .fetchAll();
+            const database = await getDatabase();
+            const collection = database.collection('MediaAssets');
+            
+            // Get all media items sorted by upload date
+            const items = await collection
+                .find({})
+                .sort({ uploadedAt: -1 })
+                .toArray();
 
             context.log(`Found ${items.length} media items`);
 
@@ -57,4 +65,3 @@ app.http('media-list', {
         }
     }
 });
-
