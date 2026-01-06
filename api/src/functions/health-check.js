@@ -17,56 +17,44 @@ app.http('health-check', {
             version: '1.0.0',
             services: {
                 api: 'running',
-                mongodb: 'unknown',
+                cosmosdb: 'unknown',
                 blobStorage: 'unknown'
             }
         };
 
-        // Test MongoDB connection
+        // Test Cosmos DB connection
         try {
-            const { MongoClient } = require('mongodb');
-            if (process.env.COSMOS_CONNECTION_STRING) {
-                const client = new MongoClient(process.env.COSMOS_CONNECTION_STRING);
-                await client.connect();
-                await client.db('DroneMediaDB').command({ ping: 1 });
-                await client.close();
-                healthStatus.services.mongodb = 'connected';
+            const { CosmosClient } = require('@azure/cosmos');
+            if (process.env.COSMOS_ENDPOINT && process.env.COSMOS_KEY) {
+                const client = new CosmosClient({ 
+                    endpoint: process.env.COSMOS_ENDPOINT, 
+                    key: process.env.COSMOS_KEY 
+                });
+                await client.getDatabaseAccount();
+                healthStatus.services.cosmosdb = 'connected';
             } else {
-                healthStatus.services.mongodb = 'not configured';
-                healthStatus.status = 'degraded';
+                healthStatus.services.cosmosdb = 'COSMOS_ENDPOINT or COSMOS_KEY not set';
             }
         } catch (error) {
-            healthStatus.services.mongodb = 'error: ' + error.message;
-            healthStatus.status = 'degraded';
+            healthStatus.services.cosmosdb = `error: ${error.message}`;
         }
 
         // Test Blob Storage connection
         try {
             const { BlobServiceClient } = require('@azure/storage-blob');
             if (process.env.STORAGE_CONNECTION_STRING) {
-                const blobServiceClient = BlobServiceClient.fromConnectionString(
-                    process.env.STORAGE_CONNECTION_STRING
-                );
-                await blobServiceClient.getProperties();
+                const blobServiceClient = BlobServiceClient.fromConnectionString(process.env.STORAGE_CONNECTION_STRING);
+                await blobServiceClient.getAccountInfo();
                 healthStatus.services.blobStorage = 'connected';
             } else {
-                healthStatus.services.blobStorage = 'not configured';
-                healthStatus.status = 'degraded';
+                healthStatus.services.blobStorage = 'STORAGE_CONNECTION_STRING not set';
             }
         } catch (error) {
-            healthStatus.services.blobStorage = 'error: ' + error.message;
-            healthStatus.status = 'degraded';
+            healthStatus.services.blobStorage = `error: ${error.message}`;
         }
 
-        const statusCode = healthStatus.status === 'healthy' ? 200 : 503;
-
         return {
-            status: statusCode,
-            headers: {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
-            },
-            body: JSON.stringify(healthStatus)
+            jsonBody: healthStatus
         };
     }
 });

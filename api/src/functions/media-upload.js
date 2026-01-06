@@ -1,23 +1,33 @@
 const { app } = require('@azure/functions');
-const { MongoClient } = require('mongodb');
+const { CosmosClient } = require('@azure/cosmos');
 const { BlobServiceClient } = require('@azure/storage-blob');
 const { v4: uuidv4 } = require('uuid');
 
-// MongoDB connection
-let mongoClient = null;
-let db = null;
+// Cosmos DB connection
+let cosmosClient = null;
+let container = null;
 
-async function getDatabase() {
-    if (!db) {
-        const connectionString = process.env.COSMOS_CONNECTION_STRING;
-        if (!connectionString) {
-            throw new Error('COSMOS_CONNECTION_STRING environment variable is not set');
+async function getContainer() {
+    if (!container) {
+        const endpoint = process.env.COSMOS_ENDPOINT;
+        const key = process.env.COSMOS_KEY;
+        
+        if (!endpoint || !key) {
+            throw new Error('COSMOS_ENDPOINT and COSMOS_KEY environment variables must be set');
         }
-        mongoClient = new MongoClient(connectionString);
-        await mongoClient.connect();
-        db = mongoClient.db('DroneMediaDB');
+        
+        cosmosClient = new CosmosClient({ endpoint, key });
+        const database = cosmosClient.database('DroneMediaDB');
+        container = database.container('media');
+        
+        // Ensure database and container exist
+        await cosmosClient.databases.createIfNotExists({ id: 'DroneMediaDB' });
+        await database.containers.createIfNotExists({ 
+            id: 'media',
+            partitionKey: { paths: ['/id'] }
+        });
     }
-    return db;
+    return container;
 }
 
 // Get Blob container client
@@ -35,110 +45,70 @@ app.http('media-upload', {
     authLevel: 'anonymous',
     route: 'media',
     handler: async (request, context) => {
-        context.log('POST /api/media - Uploading media asset');
+        context.log('POST /api/media - Uploading new media asset');
 
         try {
             const formData = await request.formData();
             const file = formData.get('file');
             const title = formData.get('title') || 'Untitled';
             const description = formData.get('description') || '';
-            const latitude = formData.get('latitude') || null;
-            const longitude = formData.get('longitude') || null;
-            const altitude = formData.get('altitude') || null;
-            const droneModel = formData.get('droneModel') || '';
-            const missionId = formData.get('missionId') || '';
+            const tagsString = formData.get('tags');
+            const tags = tagsString ? tagsString.split(',').map(tag => tag.trim()) : [];
 
             if (!file) {
                 return {
                     status: 400,
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Access-Control-Allow-Origin': '*'
-                    },
-                    body: JSON.stringify({
-                        success: false,
-                        error: 'No file provided'
-                    })
+                    jsonBody: {
+                        message: 'No file uploaded'
+                    }
                 };
             }
 
-            // Generate unique ID and blob name
-            const id = uuidv4();
-            const fileExtension = file.name.split('.').pop();
-            const blobName = `${id}.${fileExtension}`;
+            const mediaId = uuidv4();
+            const fileName = `${mediaId}-${file.name}`;
+            
+            // Upload to Blob Storage
+            const blobContainerClient = getBlobContainerClient();
+            await blobContainerClient.createIfNotExists({ access: 'blob' });
+            const blockBlobClient = blobContainerClient.getBlockBlobClient(fileName);
 
-            // Upload file to Blob Storage
-            const containerClient = getBlobContainerClient();
-            
-            // Ensure container exists
-            await containerClient.createIfNotExists({ access: 'blob' });
-            
-            const blockBlobClient = containerClient.getBlockBlobClient(blobName);
+            // Get file content as ArrayBuffer
             const arrayBuffer = await file.arrayBuffer();
             const buffer = Buffer.from(arrayBuffer);
 
             await blockBlobClient.uploadData(buffer, {
-                blobHTTPHeaders: {
-                    blobContentType: file.type
-                }
+                blobHTTPHeaders: { blobContentType: file.type }
             });
 
-            const blobUrl = blockBlobClient.url;
-
-            // Create metadata document in MongoDB
-            const mediaDocument = {
-                _id: id,
-                id: id,
+            // Create media item
+            const mediaItem = {
+                id: mediaId,
                 title: title,
                 description: description,
-                fileName: file.name,
+                fileName: fileName,
+                fileUrl: blockBlobClient.url,
                 fileType: file.type,
                 fileSize: file.size,
-                blobUrl: blobUrl,
-                blobName: blobName,
-                metadata: {
-                    gps: {
-                        latitude: latitude ? parseFloat(latitude) : null,
-                        longitude: longitude ? parseFloat(longitude) : null,
-                        altitude: altitude ? parseFloat(altitude) : null
-                    },
-                    droneModel: droneModel,
-                    missionId: missionId
-                },
-                uploadedAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
+                tags: tags,
+                uploadDate: new Date().toISOString()
             };
 
-            const database = await getDatabase();
-            const collection = database.collection('MediaAssets');
-            const result = await collection.insertOne(mediaDocument);
-
-            context.log(`Media uploaded successfully: ${id}`);
+            // Save to Cosmos DB
+            const mediaContainer = await getContainer();
+            await mediaContainer.items.create(mediaItem);
 
             return {
                 status: 201,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*'
-                },
-                body: JSON.stringify({
-                    success: true,
-                    message: 'Media uploaded successfully',
-                    data: mediaDocument
-                })
+                jsonBody: mediaItem
             };
         } catch (error) {
-            context.error('Error uploading media:', error);
+            context.error(`Error uploading media asset: ${error.message}`);
             return {
                 status: 500,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*'
-                },
-                body: JSON.stringify({
-                    success: false,
+                jsonBody: {
+                    message: 'Error uploading media asset',
                     error: error.message
-                })
+                }
             };
         }
     }

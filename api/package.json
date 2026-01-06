@@ -9,8 +9,8 @@
   },
   "dependencies": {
     "@azure/functions": "^4.0.0",
+    "@azure/cosmos": "^4.0.0",
     "@azure/storage-blob": "^12.17.0",
-    "mongodb": "^6.3.0",
     "applicationinsights": "^2.9.0",
     "uuid": "^9.0.0"
   },

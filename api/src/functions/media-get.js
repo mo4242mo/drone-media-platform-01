@@ -1,21 +1,24 @@
 const { app } = require('@azure/functions');
-const { MongoClient } = require('mongodb');
+const { CosmosClient } = require('@azure/cosmos');
 
-// MongoDB connection
-let client = null;
-let db = null;
+// Cosmos DB connection
+let cosmosClient = null;
+let container = null;
 
-async function getDatabase() {
-    if (!db) {
-        const connectionString = process.env.COSMOS_CONNECTION_STRING;
-        if (!connectionString) {
-            throw new Error('COSMOS_CONNECTION_STRING environment variable is not set');
+async function getContainer() {
+    if (!container) {
+        const endpoint = process.env.COSMOS_ENDPOINT;
+        const key = process.env.COSMOS_KEY;
+        
+        if (!endpoint || !key) {
+            throw new Error('COSMOS_ENDPOINT and COSMOS_KEY environment variables must be set');
         }
-        client = new MongoClient(connectionString);
-        await client.connect();
-        db = client.db('DroneMediaDB');
+        
+        cosmosClient = new CosmosClient({ endpoint, key });
+        const database = cosmosClient.database('DroneMediaDB');
+        container = database.container('media');
     }
-    return db;
+    return container;
 }
 
 app.http('media-get', {
@@ -27,48 +30,39 @@ app.http('media-get', {
         context.log(`GET /api/media/${id} - Getting media asset`);
 
         try {
-            const database = await getDatabase();
-            const collection = database.collection('MediaAssets');
-            const item = await collection.findOne({ id: id });
+            const mediaContainer = await getContainer();
+            
+            // Read item by id and partition key
+            const { resource: mediaItem } = await mediaContainer.item(id, id).read();
 
-            if (!item) {
+            if (!mediaItem) {
                 return {
                     status: 404,
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Access-Control-Allow-Origin': '*'
-                    },
-                    body: JSON.stringify({
-                        success: false,
-                        error: 'Media not found'
-                    })
+                    jsonBody: {
+                        message: `Media asset with id ${id} not found`
+                    }
                 };
             }
 
             return {
-                status: 200,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*'
-                },
-                body: JSON.stringify({
-                    success: true,
-                    data: item
-                })
+                jsonBody: mediaItem
             };
         } catch (error) {
-            context.error('Error getting media:', error);
-
+            if (error.code === 404) {
+                return {
+                    status: 404,
+                    jsonBody: {
+                        message: `Media asset with id ${id} not found`
+                    }
+                };
+            }
+            context.error(`Error getting media asset: ${error.message}`);
             return {
                 status: 500,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*'
-                },
-                body: JSON.stringify({
-                    success: false,
+                jsonBody: {
+                    message: 'Error getting media asset',
                     error: error.message
-                })
+                }
             };
         }
     }

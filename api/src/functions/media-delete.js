@@ -1,22 +1,25 @@
 const { app } = require('@azure/functions');
-const { MongoClient } = require('mongodb');
+const { CosmosClient } = require('@azure/cosmos');
 const { BlobServiceClient } = require('@azure/storage-blob');
 
-// MongoDB connection
-let client = null;
-let db = null;
+// Cosmos DB connection
+let cosmosClient = null;
+let container = null;
 
-async function getDatabase() {
-    if (!db) {
-        const connectionString = process.env.COSMOS_CONNECTION_STRING;
-        if (!connectionString) {
-            throw new Error('COSMOS_CONNECTION_STRING environment variable is not set');
+async function getContainer() {
+    if (!container) {
+        const endpoint = process.env.COSMOS_ENDPOINT;
+        const key = process.env.COSMOS_KEY;
+        
+        if (!endpoint || !key) {
+            throw new Error('COSMOS_ENDPOINT and COSMOS_KEY environment variables must be set');
         }
-        client = new MongoClient(connectionString);
-        await client.connect();
-        db = client.db('DroneMediaDB');
+        
+        cosmosClient = new CosmosClient({ endpoint, key });
+        const database = cosmosClient.database('DroneMediaDB');
+        container = database.container('media');
     }
-    return db;
+    return container;
 }
 
 // Get Blob container client
@@ -38,68 +41,53 @@ app.http('media-delete', {
         context.log(`DELETE /api/media/${id} - Deleting media asset`);
 
         try {
-            const database = await getDatabase();
-            const collection = database.collection('MediaAssets');
-            
-            // Get existing item to get blob name
-            const existingItem = await collection.findOne({ id: id });
+            const mediaContainer = await getContainer();
 
-            if (!existingItem) {
+            // First, get the existing item to get the file name
+            const { resource: mediaItem } = await mediaContainer.item(id, id).read();
+            
+            if (!mediaItem) {
                 return {
                     status: 404,
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Access-Control-Allow-Origin': '*'
-                    },
-                    body: JSON.stringify({
-                        success: false,
-                        error: 'Media not found'
-                    })
+                    jsonBody: {
+                        message: `Media asset with id ${id} not found`
+                    }
                 };
             }
 
-            // Delete blob from storage
-            if (existingItem.blobName) {
+            // Delete from Cosmos DB
+            await mediaContainer.item(id, id).delete();
+
+            // Delete from Blob Storage
+            if (mediaItem.fileName) {
                 try {
-                    const containerClient = getBlobContainerClient();
-                    const blockBlobClient = containerClient.getBlockBlobClient(existingItem.blobName);
+                    const blobContainerClient = getBlobContainerClient();
+                    const blockBlobClient = blobContainerClient.getBlockBlobClient(mediaItem.fileName);
                     await blockBlobClient.deleteIfExists();
-                    context.log(`Blob deleted: ${existingItem.blobName}`);
                 } catch (blobError) {
-                    context.warn(`Failed to delete blob: ${blobError.message}`);
+                    context.warn(`Could not delete blob: ${blobError.message}`);
                 }
             }
 
-            // Delete document from MongoDB
-            await collection.deleteOne({ id: id });
-
-            context.log(`Media deleted successfully: ${id}`);
-
             return {
-                status: 200,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*'
-                },
-                body: JSON.stringify({
-                    success: true,
-                    message: 'Media deleted successfully',
-                    deletedId: id
-                })
+                status: 204 // No content for successful deletion
             };
         } catch (error) {
-            context.error('Error deleting media:', error);
-
+            if (error.code === 404) {
+                return {
+                    status: 404,
+                    jsonBody: {
+                        message: `Media asset with id ${id} not found`
+                    }
+                };
+            }
+            context.error(`Error deleting media asset: ${error.message}`);
             return {
                 status: 500,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*'
-                },
-                body: JSON.stringify({
-                    success: false,
+                jsonBody: {
+                    message: 'Error deleting media asset',
                     error: error.message
-                })
+                }
             };
         }
     }

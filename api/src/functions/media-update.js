@@ -1,21 +1,24 @@
 const { app } = require('@azure/functions');
-const { MongoClient } = require('mongodb');
+const { CosmosClient } = require('@azure/cosmos');
 
-// MongoDB connection
-let client = null;
-let db = null;
+// Cosmos DB connection
+let cosmosClient = null;
+let container = null;
 
-async function getDatabase() {
-    if (!db) {
-        const connectionString = process.env.COSMOS_CONNECTION_STRING;
-        if (!connectionString) {
-            throw new Error('COSMOS_CONNECTION_STRING environment variable is not set');
+async function getContainer() {
+    if (!container) {
+        const endpoint = process.env.COSMOS_ENDPOINT;
+        const key = process.env.COSMOS_KEY;
+        
+        if (!endpoint || !key) {
+            throw new Error('COSMOS_ENDPOINT and COSMOS_KEY environment variables must be set');
         }
-        client = new MongoClient(connectionString);
-        await client.connect();
-        db = client.db('DroneMediaDB');
+        
+        cosmosClient = new CosmosClient({ endpoint, key });
+        const database = cosmosClient.database('DroneMediaDB');
+        container = database.container('media');
     }
-    return db;
+    return container;
 }
 
 app.http('media-update', {
@@ -27,81 +30,51 @@ app.http('media-update', {
         context.log(`PUT /api/media/${id} - Updating media asset`);
 
         try {
-            const database = await getDatabase();
-            const collection = database.collection('MediaAssets');
-            
-            // Get existing item
-            const existingItem = await collection.findOne({ id: id });
+            const mediaContainer = await getContainer();
+            const updatedData = await request.json();
 
+            // First, get the existing item
+            const { resource: existingItem } = await mediaContainer.item(id, id).read();
+            
             if (!existingItem) {
                 return {
                     status: 404,
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Access-Control-Allow-Origin': '*'
-                    },
-                    body: JSON.stringify({
-                        success: false,
-                        error: 'Media not found'
-                    })
+                    jsonBody: {
+                        message: `Media asset with id ${id} not found`
+                    }
                 };
             }
 
-            // Parse request body
-            const body = await request.json();
-
-            // Update only allowed fields
-            const updateData = {
-                title: body.title || existingItem.title,
-                description: body.description || existingItem.description,
-                metadata: {
-                    ...existingItem.metadata,
-                    gps: {
-                        latitude: body.latitude !== undefined ? parseFloat(body.latitude) : existingItem.metadata?.gps?.latitude,
-                        longitude: body.longitude !== undefined ? parseFloat(body.longitude) : existingItem.metadata?.gps?.longitude,
-                        altitude: body.altitude !== undefined ? parseFloat(body.altitude) : existingItem.metadata?.gps?.altitude
-                    },
-                    droneModel: body.droneModel || existingItem.metadata?.droneModel,
-                    missionId: body.missionId || existingItem.metadata?.missionId
-                },
-                updatedAt: new Date().toISOString()
+            // Merge existing data with updates
+            const updatedItem = {
+                ...existingItem,
+                ...updatedData,
+                id: id, // Ensure id is not changed
+                updatedDate: new Date().toISOString()
             };
 
-            // Update item in MongoDB
-            const result = await collection.updateOne(
-                { id: id },
-                { $set: updateData }
-            );
-
-            const updatedItem = await collection.findOne({ id: id });
-
-            context.log(`Media updated successfully: ${id}`);
+            // Replace the item
+            const { resource: result } = await mediaContainer.item(id, id).replace(updatedItem);
 
             return {
-                status: 200,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*'
-                },
-                body: JSON.stringify({
-                    success: true,
-                    message: 'Media updated successfully',
-                    data: updatedItem
-                })
+                jsonBody: result
             };
         } catch (error) {
-            context.error('Error updating media:', error);
-
+            if (error.code === 404) {
+                return {
+                    status: 404,
+                    jsonBody: {
+                        message: `Media asset with id ${id} not found`
+                    }
+                };
+            }
+            context.error(`Error updating media asset: ${error.message}`);
             return {
                 status: 500,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*'
-                },
-                body: JSON.stringify({
-                    success: false,
+                jsonBody: {
+                    message: 'Error updating media asset',
                     error: error.message
-                })
+                }
             };
         }
     }
