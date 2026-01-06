@@ -77,6 +77,9 @@ async function loadMedia() {
     try {
         const response = await apiCall('/media');
         mediaItems = Array.isArray(response) ? response : [];
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/f0768959-7ad9-4b46-9120-e67d373d75f7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:79',message:'API response received',data:{count:mediaItems.length,firstItem:mediaItems[0]},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B3,B4'})}).catch(()=>{});
+        // #endregion
         updateStats();
         renderMedia();
     } catch (error) {
@@ -204,6 +207,9 @@ function openMediaModal(id) {
     
     // Set GPS metadata
     const gps = item.gps || {};
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/f0768959-7ad9-4b46-9120-e67d373d75f7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:210',message:'Displaying GPS metadata in modal',data:{itemId:item.id,fileName:item.fileName,gps:item.gps,metadata:item.metadata,extractedGps:gps},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B3,B5'})}).catch(()=>{});
+    // #endregion
     document.getElementById('modalLatitude').textContent = gps.latitude || 'N/A';
     document.getElementById('modalLongitude').textContent = gps.longitude || 'N/A';
     document.getElementById('modalAltitude').textContent = gps.altitude ? `${gps.altitude}m` : 'N/A';

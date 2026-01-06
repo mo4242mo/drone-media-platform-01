@@ -62,6 +62,10 @@ app.http('media-upload', {
             const droneModel = formData.get('droneModel');
             const missionId = formData.get('missionId');
 
+            // #region agent log
+            fetch('http://127.0.0.1:7243/ingest/f0768959-7ad9-4b46-9120-e67d373d75f7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'media-upload.js:63',message:'FormData GPS fields received',data:{latitude,longitude,altitude,droneModel,missionId,fileName:file?.name},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A3,B1'})}).catch(()=>{});
+            // #endregion
+
             if (!file) {
                 return {
                     status: 400,
@@ -109,9 +113,17 @@ app.http('media-upload', {
                 }
             };
 
+            // #region agent log
+            fetch('http://127.0.0.1:7243/ingest/f0768959-7ad9-4b46-9120-e67d373d75f7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'media-upload.js:110',message:'MediaItem constructed before DB save',data:{mediaItem},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A1,A2,B2'})}).catch(()=>{});
+            // #endregion
+
             // Save to Cosmos DB
             const mediaContainer = await getContainer();
             await mediaContainer.items.create(mediaItem);
+
+            // #region agent log
+            fetch('http://127.0.0.1:7243/ingest/f0768959-7ad9-4b46-9120-e67d373d75f7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'media-upload.js:118',message:'MediaItem saved to Cosmos DB',data:{id:mediaItem.id,hasGps:!!mediaItem.gps,gpsValues:mediaItem.gps},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B2'})}).catch(()=>{});
+            // #endregion
 
             return {
                 status: 201,

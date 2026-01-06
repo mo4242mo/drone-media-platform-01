@@ -172,6 +172,10 @@ async function handleUpload(e) {
         formData.append('droneModel', document.getElementById('droneModel').value);
         formData.append('missionId', document.getElementById('missionId').value);
         
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/f0768959-7ad9-4b46-9120-e67d373d75f7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'upload.js:173',message:'FormData created before upload',data:{fileName:selectedFile.name,latitude:document.getElementById('latitude').value,longitude:document.getElementById('longitude').value,altitude:document.getElementById('altitude').value,droneModel:document.getElementById('droneModel').value},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B1,B5'})}).catch(()=>{});
+        // #endregion
+        
         // Simulate progress (real progress would require XMLHttpRequest)
         simulateProgress();
         
